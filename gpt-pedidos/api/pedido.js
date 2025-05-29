@@ -18,5 +18,5 @@ export default async function handler(req, res) {
     observacoes: observacoes || ""
   };
 
-  return res.status(200).json({ mensagem: "Pedido recebido com sucesso!", pedido: pedidoFormatado });
+  return res.status(200).json({ sucesso: true, pedido: pedidoFormatado });
 }
