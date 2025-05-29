@@ -1,21 +1,19 @@
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
-import { Configuration, OpenAIApi } from "openai";
+import OpenAI from "openai";
 
 dotenv.config();
 const app = express();
 app.use(express.json());
 
-const configuration = new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
-// Webhook do Make
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Verifica se todos os campos do pedido foram preenchidos
+// Verifica se o JSON tem todos os campos
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -31,36 +29,27 @@ app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
 
   try {
-    const completion = await openai.createChatCompletion({
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o", // ou "gpt-3.5-turbo"
       messages: [
         {
           role: "system",
           content: `
-Você é um atendente da Giulia Pizzaria. Sempre que o cliente fornecer um pedido completo, responda com um JSON estruturado contendo:
-- nome
-- produto
-- quantidade
-- pagamento
-- endereco
-- telefone
-- observacao (opcional)
-- datahora (formato ISO)
+Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quando o pedido estiver completo, retorne um JSON com:
 
-Exemplo de resposta:
 {
-  "nome": "João",
-  "produto": "Pizza calabresa",
-  "quantidade": 1,
-  "pagamento": "Pix",
-  "endereco": "Rua X, 123",
-  "telefone": "11999999999",
-  "observacao": "Sem cebola",
-  "datahora": "2025-05-29T20:00:00"
+  "nome": "...",
+  "produto": "...",
+  "quantidade": ...,
+  "pagamento": "...",
+  "endereco": "...",
+  "telefone": "...",
+  "observacao": "...",
+  "datahora": "{{horário atual no formato ISO}}"
 }
 
-Não adicione explicações. Retorne apenas o JSON se o pedido estiver completo.
-`,
+Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
+          `,
         },
         {
           role: "user",
@@ -69,19 +58,19 @@ Não adicione explicações. Retorne apenas o JSON se o pedido estiver completo.
       ],
     });
 
-    const resposta = completion.data.choices[0].message.content;
+    const resposta = completion.choices[0].message.content;
 
-    // Se a resposta tiver todos os campos, envia pro Make
+    // Se for JSON válido, envia para o Make
     if (pedidoCompleto(resposta)) {
       await axios.post(MAKE_WEBHOOK_URL, JSON.parse(resposta));
     }
 
     res.json({ resposta });
   } catch (erro) {
-    console.error("Erro:", erro.response?.data || erro.message);
+    console.error("Erro ao chamar GPT ou enviar para Make:", erro.response?.data || erro.message);
     res.status(500).json({ erro: "Erro ao processar pedido" });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
