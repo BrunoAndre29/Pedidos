@@ -48,6 +48,8 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "datahora": "{{horário atual no formato ISO}}"
 }
 
+Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
+
 Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
           `,
         },
@@ -60,9 +62,19 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
     const resposta = completion.choices[0].message.content;
 
-    // Se for JSON válido, envia para o Make
     if (pedidoCompleto(resposta)) {
-      await axios.post(MAKE_WEBHOOK_URL, JSON.parse(resposta));
+      const json = JSON.parse(resposta);
+
+      // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
+      const match = json.nome.match(/#(\\d{4})$/);
+      const numeroPedido = match ? parseInt(match[1]) : null;
+
+      const jsonFinal = {
+        ...json,
+        numero_pedido: numeroPedido,
+      };
+
+      await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
     }
 
     res.json({ resposta });
