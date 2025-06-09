@@ -13,14 +13,16 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Função para checar se é JSON válido
-function isValidJSON(text) {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
+// Verifica se o JSON tem todos os campos
+function pedidoCompleto(texto) {
+  return (
+    texto.includes('"nome":') &&
+    texto.includes('"produto":') &&
+    texto.includes('"quantidade":') &&
+    texto.includes('"pagamento":') &&
+    texto.includes('"endereco":') &&
+    texto.includes('"telefone":')
+  );
 }
 
 app.post("/chat", async (req, res) => {
@@ -58,14 +60,13 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       ],
     });
 
-    const resposta = completion.choices[0].message.content.trim();
+    const resposta = completion.choices[0].message.content;
 
-    // Se for um JSON válido, envia do mesmo jeito de antes
-    if (isValidJSON(resposta)) {
+    if (pedidoCompleto(resposta)) {
       const json = JSON.parse(resposta);
 
-      // Continua igual: extrai número do pedido se existir
-      const match = json.nome?.match(/#(\d{4})$/);
+      // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
+      const match = json.nome.match(/#(\\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
       const jsonFinal = {
@@ -74,9 +75,6 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       };
 
       await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
-    } else {
-      // Se não for JSON, repassa como campo "mensagem" pro Make (ou pode usar "texto", se preferir)
-      await axios.post(MAKE_WEBHOOK_URL, { mensagem: resposta });
     }
 
     res.json({ resposta });
