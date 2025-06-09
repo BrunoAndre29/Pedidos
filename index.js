@@ -1,4 +1,4 @@
-import express from "express";
+import express from "express";More actions
 import dotenv from "dotenv";
 import axios from "axios";
 import OpenAI from "openai";
@@ -62,7 +62,9 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
     const resposta = completion.choices[0].message.content;
 
+    // Se for JSON válido, envia para o Make
     if (pedidoCompleto(resposta)) {
+      await axios.post(MAKE_WEBHOOK_URL, JSON.parse(resposta));
       const json = JSON.parse(resposta);
 
       // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
@@ -85,4 +87,4 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor rodando na port
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
