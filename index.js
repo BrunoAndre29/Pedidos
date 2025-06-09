@@ -13,7 +13,7 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Verifica se o JSON tem todos os campos
+// Verifica se é um pedido completo
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -25,24 +25,17 @@ function pedidoCompleto(texto) {
   );
 }
 
-// Nova rota apenas para verificar endereço
-app.post("/verificar-endereco", async (req, res) => {
-  const { endereco } = req.body;
-
-  if (!endereco) {
-    return res.status(400).json({ erro: "Endereço não informado" });
-  }
-
+// Verifica se é apenas o endereço
+function apenasEndereco(texto) {
   try {
-    await axios.post(MAKE_WEBHOOK_URL, { endereco });
-    res.json({ status: "Endereço enviado para verificação" });
-  } catch (erro) {
-    console.error("Erro ao enviar endereço para Make:", erro.message);
-    res.status(500).json({ erro: "Erro ao processar endereço" });
+    const json = JSON.parse(texto);
+    const keys = Object.keys(json);
+    return keys.length === 1 && keys[0] === "endereco";
+  } catch {
+    return false;
   }
-});
+}
 
-// Rota principal de conversa
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
 
@@ -66,7 +59,8 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "datahora": "{{horário atual no formato ISO}}"
 }
 
-Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
+Se for apenas o endereço, retorne um JSON como:
+{ "endereco": "Rua informada pelo cliente" }
 
 Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
           `,
@@ -80,10 +74,13 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
     const resposta = completion.choices[0].message.content;
 
+    if (apenasEndereco(resposta)) {
+      const json = JSON.parse(resposta);
+      await axios.post(MAKE_WEBHOOK_URL, json);
+    }
+
     if (pedidoCompleto(resposta)) {
       const json = JSON.parse(resposta);
-
-      // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
       const match = json.nome.match(/#(\\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
