@@ -13,10 +13,10 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Função utilitária para tentar identificar se a mensagem é JSON válida
-function isValidJSON(str) {
+// Função para checar se é JSON válido
+function isValidJSON(text) {
   try {
-    JSON.parse(str);
+    JSON.parse(text);
     return true;
   } catch {
     return false;
@@ -28,7 +28,7 @@ app.post("/chat", async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // ou "gpt-3.5-turbo"
       messages: [
         {
           role: "system",
@@ -60,13 +60,23 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
     const resposta = completion.choices[0].message.content.trim();
 
-    // Se a resposta for JSON, envia direto para o Make
+    // Se for um JSON válido, envia do mesmo jeito de antes
     if (isValidJSON(resposta)) {
       const json = JSON.parse(resposta);
-      await axios.post(MAKE_WEBHOOK_URL, json);
+
+      // Continua igual: extrai número do pedido se existir
+      const match = json.nome?.match(/#(\d{4})$/);
+      const numeroPedido = match ? parseInt(match[1]) : null;
+
+      const jsonFinal = {
+        ...json,
+        numero_pedido: numeroPedido,
+      };
+
+      await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
     } else {
-      // Não faz nada! Só repassa o texto "cru" como veio do GPT
-      await axios.post(MAKE_WEBHOOK_URL, { endereco: resposta });
+      // Se não for JSON, repassa como campo "mensagem" pro Make (ou pode usar "texto", se preferir)
+      await axios.post(MAKE_WEBHOOK_URL, { mensagem: resposta });
     }
 
     res.json({ resposta });
