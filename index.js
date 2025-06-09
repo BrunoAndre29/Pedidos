@@ -13,7 +13,7 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Verifica se o JSON tem todos os campos do pedido
+// Verifica se o JSON contém todos os campos de um pedido completo
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -48,12 +48,9 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "datahora": "{{horário atual no formato ISO}}"
 }
 
-Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
-
-Se o cliente informar apenas o endereço para verificação, envie:
-
+Se o cliente quiser apenas verificar o endereço, retorne:
 {
-  "endereco": "Rua do cliente"
+  "endereco": "Rua informada pelo cliente"
 }
 
 Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
@@ -69,28 +66,24 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
     const resposta = completion.choices[0].message.content;
 
     let json;
-
     try {
       json = JSON.parse(resposta);
     } catch {
-      return res.json({ resposta }); // Se não for JSON, devolve só a resposta normal
+      return res.json({ resposta }); // Retorna a resposta do GPT se não for JSON
     }
 
-    // Se for um pedido completo, envia para o Make
+    // Se for um pedido completo, envia com número de pedido
     if (pedidoCompleto(resposta)) {
-      const match = json.nome.match(/#(\\d{4})$/);
+      const match = json.nome.match(/#(\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
-
       const jsonFinal = {
         ...json,
         numero_pedido: numeroPedido,
       };
-
       await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
     }
-
-    // Se for apenas um endereço
-    else if (json.endereco && !json.produto && !json.telefone) {
+    // Se for apenas endereço, envia só o campo endereco
+    else if (json.endereco) {
       await axios.post(MAKE_WEBHOOK_URL, { endereco: json.endereco });
     }
 
@@ -103,4 +96,5 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+
 
