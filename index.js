@@ -13,7 +13,7 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 
-// Verifica se o JSON contém todos os campos de um pedido completo
+// Verifica se o JSON tem todos os campos
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -30,7 +30,7 @@ app.post("/chat", async (req, res) => {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o", // ou "gpt-3.5-turbo"
       messages: [
         {
           role: "system",
@@ -48,10 +48,7 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "datahora": "{{horário atual no formato ISO}}"
 }
 
-Se o cliente quiser apenas verificar o endereço, retorne:
-{
-  "endereco": "Rua informada pelo cliente"
-}
+Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
 
 Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
           `,
@@ -65,26 +62,19 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 
     const resposta = completion.choices[0].message.content;
 
-    let json;
-    try {
-      json = JSON.parse(resposta);
-    } catch {
-      return res.json({ resposta }); // Retorna a resposta do GPT se não for JSON
-    }
-
-    // Se for um pedido completo, envia com número de pedido
     if (pedidoCompleto(resposta)) {
-      const match = json.nome.match(/#(\d{4})$/);
+      const json = JSON.parse(resposta);
+
+      // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
+      const match = json.nome.match(/#(\\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
+
       const jsonFinal = {
         ...json,
         numero_pedido: numeroPedido,
       };
+
       await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
-    }
-    // Se for apenas endereço, envia só o campo endereco
-    else if (json.endereco) {
-      await axios.post(MAKE_WEBHOOK_URL, { endereco: json.endereco });
     }
 
     res.json({ resposta });
@@ -95,6 +85,4 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
-
-
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na port
