@@ -12,6 +12,7 @@ const openai = new OpenAI({
 });
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
+const MAKE_ENDERECO_URL = "https://hook.us2.make.com/rdx1tngbudyl7a83t9uin1hqlp7oidug";
 
 // Verifica se o JSON tem todos os campos
 function pedidoCompleto(texto) {
@@ -23,6 +24,16 @@ function pedidoCompleto(texto) {
     texto.includes('"endereco":') &&
     texto.includes('"telefone":')
   );
+}
+
+// Verifica se o JSON tem apenas o campo de endereço
+function apenasEndereco(texto) {
+  try {
+    const json = JSON.parse(texto);
+    return Object.keys(json).length === 1 && json.endereco;
+  } catch {
+    return false;
+  }
 }
 
 app.post("/chat", async (req, res) => {
@@ -48,6 +59,11 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "datahora": "{{horário atual no formato ISO}}"
 }
 
+Se o cliente informar apenas o endereço, retorne o JSON assim:
+{
+  "endereco": "Rua Exemplo, 123 - Bairro - Cidade"
+}
+
 Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
 
 Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON final.
@@ -66,7 +82,7 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       const json = JSON.parse(resposta);
 
       // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
-      const match = json.nome.match(/#(\\d{4})$/);
+      const match = json.nome.match(/#(\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
       const jsonFinal = {
@@ -75,6 +91,9 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       };
 
       await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
+    } else if (apenasEndereco(resposta)) {
+      const enderecoJson = JSON.parse(resposta);
+      await axios.post(MAKE_WEBHOOK_URL, enderecoJson);
     }
 
     res.json({ resposta });
