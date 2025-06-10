@@ -26,7 +26,7 @@ function pedidoCompleto(texto) {
   );
 }
 
-// Endpoint principal usado pelo GPT
+// Endpoint principal chamado pelo GPT
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
 
@@ -75,17 +75,22 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
         numero_pedido: numeroPedido,
       };
 
-      await axios.post(MAKE_WEBHOOK_URL, jsonFinal);
+      // 🔁 Envia o pedido para o endpoint que verifica a distância
+      const respostaVerificacao = await axios.post("https://pedidos-wlsk.onrender.com/verificar-pedido", jsonFinal);
+
+      // 🔙 Retorna a resposta pro GPT (dentro ou fora da área de entrega)
+      return res.json({ resposta: respostaVerificacao.data });
     }
 
+    // Pedido incompleto → retorna a resposta original do GPT
     res.json({ resposta });
   } catch (erro) {
-    console.error("Erro ao chamar GPT ou enviar para Make:", erro.response?.data || erro.message);
+    console.error("Erro ao chamar GPT ou processar pedido:", erro.response?.data || erro.message);
     res.status(500).json({ erro: "Erro ao processar pedido" });
   }
 });
 
-// NOVO endpoint: usado pelo GPT para verificar endereço e decidir se envia
+// Novo endpoint que verifica a distância do endereço do cliente
 app.post("/verificar-pedido", async (req, res) => {
   const pedido = req.body;
   const { endereco } = pedido;
@@ -106,7 +111,7 @@ app.post("/verificar-pedido", async (req, res) => {
       );
     }
 
-    // Dentro da área → envia pro Make
+    // Dentro da área → envia para o Make
     await axios.post(MAKE_WEBHOOK_URL, pedido);
 
     return res.send("✅ Pedido confirmado com sucesso! Suas pizzas estão a caminho 🍕");
@@ -115,6 +120,11 @@ app.post("/verificar-pedido", async (req, res) => {
     return res.status(500).send("Erro ao verificar o endereço. Tente novamente em instantes.");
   }
 });
+
+// Inicializa o servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
