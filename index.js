@@ -12,8 +12,9 @@ const openai = new OpenAI({
 });
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
+const ENDERECO_ORIGEM = "Rua Paquequer, 360 - Santa Maria, Santo André - SP";
 
-// Verifica se o JSON tem todos os campos
+// Verifica se o JSON tem todos os campos obrigatórios
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -25,12 +26,13 @@ function pedidoCompleto(texto) {
   );
 }
 
+// Endpoint principal usado pelo GPT
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o", // ou "gpt-3.5-turbo"
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -65,8 +67,7 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
     if (pedidoCompleto(resposta)) {
       const json = JSON.parse(resposta);
 
-      // Tenta extrair número do pedido do nome, ex: "Pedro #7429"
-      const match = json.nome.match(/#(\\d{4})$/);
+      const match = json.nome.match(/#(\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
       const jsonFinal = {
@@ -81,6 +82,37 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
   } catch (erro) {
     console.error("Erro ao chamar GPT ou enviar para Make:", erro.response?.data || erro.message);
     res.status(500).json({ erro: "Erro ao processar pedido" });
+  }
+});
+
+// NOVO endpoint: usado pelo GPT para verificar endereço e decidir se envia
+app.post("/verificar-pedido", async (req, res) => {
+  const pedido = req.body;
+  const { endereco } = pedido;
+
+  try {
+    const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(
+      ENDERECO_ORIGEM
+    )}&destinations=${encodeURIComponent(endereco)}&key=${googleApiKey}`;
+
+    const resposta = await axios.get(url);
+    const distanciaMetros = resposta.data.rows[0].elements[0].distance.value;
+    const distanciaTexto = resposta.data.rows[0].elements[0].distance.text;
+
+    if (distanciaMetros > 10000) {
+      return res.send(
+        `😞 Infelizmente seu endereço está a ${distanciaTexto}, fora da nossa área de entrega (limite: 10 km). Que tal retirar no local?`
+      );
+    }
+
+    // Dentro da área → envia pro Make
+    await axios.post(MAKE_WEBHOOK_URL, pedido);
+
+    return res.send("✅ Pedido confirmado com sucesso! Suas pizzas estão a caminho 🍕");
+  } catch (erro) {
+    console.error("Erro ao verificar distância ou enviar pedido:", erro.response?.data || erro.message);
+    return res.status(500).send("Erro ao verificar o endereço. Tente novamente em instantes.");
   }
 });
 
