@@ -43,6 +43,7 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "nome": "...",
   "produto": "...",
   "quantidade": ...,
+  "valor": "...",
   "pagamento": "...",
   "endereco": "...",
   "telefone": "...",
@@ -73,16 +74,15 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       const jsonFinal = {
         ...json,
         numero_pedido: numeroPedido,
+        valor: json.valor // <-- NOVO: adiciona valor para o Make
       };
 
       // 🔁 Envia o pedido para o endpoint que verifica a distância
       const respostaVerificacao = await axios.post("https://pedidos-wlsk.onrender.com/verificar-pedido", jsonFinal);
 
-      // 🔙 Retorna a resposta pro GPT (dentro ou fora da área de entrega)
       return res.json({ resposta: respostaVerificacao.data });
     }
 
-    // Pedido incompleto → retorna a resposta original do GPT
     res.json({ resposta });
   } catch (erro) {
     console.error("Erro ao chamar GPT ou processar pedido:", erro.response?.data || erro.message);
@@ -111,7 +111,6 @@ app.post("/verificar-pedido", async (req, res) => {
       );
     }
 
-    // Dentro da área → envia para o Make
     await axios.post(MAKE_WEBHOOK_URL, pedido);
 
     return res.send("✅ Pedido confirmado com sucesso! Suas pizzas estão a caminho 🍕");
@@ -121,6 +120,5 @@ app.post("/verificar-pedido", async (req, res) => {
   }
 });
 
-// Inicializa o servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
