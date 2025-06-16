@@ -71,10 +71,26 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       const match = json.nome.match(/#(\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
+      // Gera datahora formatada
+      const data = new Date();
+      const datahoraFormatada =
+        data.toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }) +
+        " - " +
+        data.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+        }).slice(0, 8); // pega só "dd/MM/yy"
+
       const jsonFinal = {
         ...json,
         numero_pedido: numeroPedido,
-        valor: json.valor // <-- NOVO: adiciona valor para o Make
+        datahora: datahoraFormatada,
+        valor: json.valor,
       };
 
       // 🔁 Envia o pedido para o endpoint que verifica a distância
