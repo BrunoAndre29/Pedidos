@@ -13,6 +13,8 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 const ENDERECO_ORIGEM = "Rua Paquequer, 360 - Santa Maria, Santo André - SP";
+const HORARIO_ABERTURA = 18;
+const HORARIO_FECHAMENTO = 23;
 
 function pedidoCompleto(texto) {
   return (
@@ -34,8 +36,19 @@ function gerarDataHoraBrasil() {
   return `${hora} - ${dia}/${mes}/${ano.slice(2)}`;
 }
 
+function verificarSeEstaAberto() {
+  const horaAtual = new Date().toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    hour12: false,
+  });
+  const hora = parseInt(horaAtual);
+  return hora >= HORARIO_ABERTURA && hora < HORARIO_FECHAMENTO;
+}
+
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
+  const estaAberto = verificarSeEstaAberto();
 
   try {
     const completion = await openai.chat.completions.create({
@@ -44,7 +57,11 @@ app.post("/chat", async (req, res) => {
         {
           role: "system",
           content: `
-Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quando o pedido estiver completo, retorne um JSON com:
+Você é um atendente virtual da Giulia Pizzaria. A pizzaria está atualmente ${estaAberto ? "ABERTA" : "FECHADA"}.
+
+Se estiver fechada, informe isso ao cliente de forma simpática e ofereça a possibilidade de agendar o pedido para mais tarde.
+
+Converse com o cliente, e quando o pedido estiver completo, retorne um JSON com:
 
 {
   "nome": "...",
