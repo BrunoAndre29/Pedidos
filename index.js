@@ -13,8 +13,12 @@ const openai = new OpenAI({
 
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 const ENDERECO_ORIGEM = "Rua Paquequer, 360 - Santa Maria, Santo André - SP";
-const HORARIO_ABERTURA = 18;
-const HORARIO_FECHAMENTO = 23;
+
+const HORARIO_FUNCIONAMENTO = {
+  dias: [2, 3, 4, 5, 6, 0], // 0 = domingo, 2 = terça ... 6 = sábado (segunda = 1 está fora)
+  abertura: 17,
+  fechamento: 24 // 00:00
+};
 
 function pedidoCompleto(texto) {
   return (
@@ -37,13 +41,29 @@ function gerarDataHoraBrasil() {
 }
 
 function verificarSeEstaAberto() {
-  const horaAtual = new Date().toLocaleString("pt-BR", {
+  const agora = new Date();
+  const hora = parseInt(agora.toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
     hour: "2-digit",
     hour12: false,
+  }));
+
+  const diaSemana = new Date().toLocaleString("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short",
   });
-  const hora = parseInt(horaAtual);
-  return hora >= HORARIO_ABERTURA && hora < HORARIO_FECHAMENTO;
+  const diaIndex = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/Sao_Paulo",
+    weekday: "short"
+  });
+
+  const hoje = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  const diaDaSemana = new Date(hoje).getDay();
+
+  const dentroDoDia = HORARIO_FUNCIONAMENTO.dias.includes(diaDaSemana);
+  const dentroDoHorario = hora >= HORARIO_FUNCIONAMENTO.abertura && hora < HORARIO_FUNCIONAMENTO.fechamento;
+
+  return dentroDoDia && dentroDoHorario;
 }
 
 app.post("/chat", async (req, res) => {
@@ -58,6 +78,8 @@ app.post("/chat", async (req, res) => {
           role: "system",
           content: `
 Você é um atendente virtual da Giulia Pizzaria. A pizzaria está atualmente ${estaAberto ? "ABERTA" : "FECHADA"}.
+
+Horário de funcionamento: de terça a domingo, das 17:00 às 00:00.
 
 Se estiver fechada, informe isso ao cliente de forma simpática e ofereça a possibilidade de agendar o pedido para mais tarde.
 
