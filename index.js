@@ -14,7 +14,6 @@ const openai = new OpenAI({
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 const ENDERECO_ORIGEM = "Rua Paquequer, 360 - Santa Maria, Santo André - SP";
 
-// Verifica se o JSON tem todos os campos obrigatórios
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -26,7 +25,15 @@ function pedidoCompleto(texto) {
   );
 }
 
-// Endpoint principal chamado pelo GPT
+function gerarDataHoraBrasil() {
+  const agora = new Date().toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+  });
+  const [data, hora] = agora.split(", ");
+  const [dia, mes, ano] = data.split("/");
+  return `${hora} - ${dia}/${mes}/${ano.slice(2)}`;
+}
+
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
 
@@ -48,7 +55,7 @@ Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quan
   "endereco": "...",
   "telefone": "...",
   "observacao": "...",
-  "datahora": "{{horário atual no formato ISO}}"
+  "datahora": "{{horário atual no formato HH:mm - dd/MM/yy}}"
 }
 
 Se o nome contiver um número de pedido (ex: "Pedro #7429"), inclua esse número no nome, mas não retorne como campo separado.
@@ -71,29 +78,13 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
       const match = json.nome.match(/#(\d{4})$/);
       const numeroPedido = match ? parseInt(match[1]) : null;
 
-      // Gera datahora formatada
-      const data = new Date();
-      const datahoraFormatada =
-        data.toLocaleTimeString("pt-BR", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }) +
-        " - " +
-        data.toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-        }).slice(0, 8); // pega só "dd/MM/yy"
-
       const jsonFinal = {
         ...json,
         numero_pedido: numeroPedido,
-        datahora: datahoraFormatada,
         valor: json.valor,
+        datahora: gerarDataHoraBrasil(),
       };
 
-      // 🔁 Envia o pedido para o endpoint que verifica a distância
       const respostaVerificacao = await axios.post("https://pedidos-wlsk.onrender.com/verificar-pedido", jsonFinal);
 
       return res.json({ resposta: respostaVerificacao.data });
@@ -106,7 +97,6 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
   }
 });
 
-// Novo endpoint que verifica a distância do endereço do cliente
 app.post("/verificar-pedido", async (req, res) => {
   const pedido = req.body;
   const { endereco } = pedido;
