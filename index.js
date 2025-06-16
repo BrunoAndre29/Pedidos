@@ -14,12 +14,7 @@ const openai = new OpenAI({
 const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/bqj9bo2noa3iony1t5i7ed6mnq5cejws";
 const ENDERECO_ORIGEM = "Rua Paquequer, 360 - Santa Maria, Santo André - SP";
 
-const HORARIO_FUNCIONAMENTO = {
-  dias: [2, 3, 4, 5, 6, 0], // 0 = domingo, 2 = terça ... 6 = sábado (segunda = 1 está fora)
-  abertura: 17,
-  fechamento: 24 // 00:00
-};
-
+// Função para checar se o texto contém todos os campos do pedido
 function pedidoCompleto(texto) {
   return (
     texto.includes('"nome":') &&
@@ -31,6 +26,7 @@ function pedidoCompleto(texto) {
   );
 }
 
+// Gera data e hora no formato desejado (HH:mm - dd/MM/yy) no fuso de São Paulo
 function gerarDataHoraBrasil() {
   const agora = new Date().toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo",
@@ -40,35 +36,25 @@ function gerarDataHoraBrasil() {
   return `${hora} - ${dia}/${mes}/${ano.slice(2)}`;
 }
 
-function verificarSeEstaAberto() {
-  const agora = new Date();
-  const hora = parseInt(agora.toLocaleString("pt-BR", {
+// Função para verificar se a pizzaria está aberta agora
+function estaAbertoAgora() {
+  const agora = new Date().toLocaleString("en-US", {
     timeZone: "America/Sao_Paulo",
-    hour: "2-digit",
     hour12: false,
-  }));
-
-  const diaSemana = new Date().toLocaleString("en-US", {
-    timeZone: "America/Sao_Paulo",
-    weekday: "short",
   });
-  const diaIndex = new Date().toLocaleDateString("en-US", {
-    timeZone: "America/Sao_Paulo",
-    weekday: "short"
-  });
+  const data = new Date(agora);
+  const diaSemana = data.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
+  const hora = data.getHours();
 
-  const hoje = new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-  const diaDaSemana = new Date(hoje).getDay();
+  const abertoHoje = diaSemana >= 2 && diaSemana <= 7; // terça a domingo
+  const dentroHorario = hora >= 17 && hora < 24;
 
-  const dentroDoDia = HORARIO_FUNCIONAMENTO.dias.includes(diaDaSemana);
-  const dentroDoHorario = hora >= HORARIO_FUNCIONAMENTO.abertura && hora < HORARIO_FUNCIONAMENTO.fechamento;
-
-  return dentroDoDia && dentroDoHorario;
+  return abertoHoje && dentroHorario;
 }
 
+// Endpoint principal chamado pelo GPT
 app.post("/chat", async (req, res) => {
   const { mensagem } = req.body;
-  const estaAberto = verificarSeEstaAberto();
 
   try {
     const completion = await openai.chat.completions.create({
@@ -77,13 +63,7 @@ app.post("/chat", async (req, res) => {
         {
           role: "system",
           content: `
-Você é um atendente virtual da Giulia Pizzaria. A pizzaria está atualmente ${estaAberto ? "ABERTA" : "FECHADA"}.
-
-Horário de funcionamento: de terça a domingo, das 17:00 às 00:00.
-
-Se estiver fechada, informe isso ao cliente de forma simpática e ofereça a possibilidade de agendar o pedido para mais tarde.
-
-Converse com o cliente, e quando o pedido estiver completo, retorne um JSON com:
+Você é um atendente virtual da Giulia Pizzaria. Converse com o cliente, e quando o pedido estiver completo, retorne um JSON com:
 
 {
   "nome": "...",
@@ -136,11 +116,29 @@ Não escreva nada fora do JSON. Nenhuma explicação. Retorne apenas o JSON fina
   }
 });
 
+// Verifica se o pedido está fora do horário e é agendado
+function pedidoAgendadoForaDoHorario(pedido) {
+  const fechadoAgora = !estaAbertoAgora();
+  const temAgendamento =
+    pedido.observacao &&
+    pedido.observacao.toLowerCase().includes("agendado para");
+
+  return fechadoAgora && temAgendamento;
+}
+
+// Endpoint que valida a distância e decide se o pedido pode ser enviado
 app.post("/verificar-pedido", async (req, res) => {
   const pedido = req.body;
   const { endereco } = pedido;
 
   try {
+    // Se estiver fechado e não for agendamento, recusar
+    if (!estaAbertoAgora() && !pedidoAgendadoForaDoHorario(pedido)) {
+      return res.send(
+        `📢 Opa! A Giulia Pizzaria está fechada no momento.\nFuncionamos de terça a domingo, das 17h às 00h.\nSe quiser, posso agendar seu pedido. Para qual dia e horário você gostaria de agendar?`
+      );
+    }
+
     const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
     const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(
       ENDERECO_ORIGEM
